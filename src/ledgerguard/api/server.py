@@ -1,17 +1,7 @@
-"""LedgerGuard FastAPI server.
-
-Exposes the trained model over HTTP so the React landing page can call it.
-
-Launch:
-    python -m uvicorn src.ledgerguard.api.server:app --reload --port 8000
-
-Or via the PowerShell helper:
-    .\\run_server.ps1
-"""
-
 import io
 import json
 import logging
+import os
 import sys
 from dataclasses import asdict
 from pathlib import Path
@@ -24,7 +14,6 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-# Make src importable when run from project root
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "src"))
 
@@ -34,11 +23,7 @@ from ledgerguard.models.ensemble import EnsembleScorer
 logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(message)s")
 logger = logging.getLogger("ledgerguard.server")
 
-# ---------------------------------------------------------------------------
-# App + CORS (allow the Vite dev server and any local origin)
-# ---------------------------------------------------------------------------
 app = FastAPI(title="LedgerGuard API", version="0.1.0")
-import os
 _EXTRA_ORIGIN = os.getenv("ALLOWED_ORIGIN", "")
 app.add_middleware(
     CORSMiddleware,
@@ -53,9 +38,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ---------------------------------------------------------------------------
-# Model (loaded once on startup)
-# ---------------------------------------------------------------------------
 _scorer: Optional[EnsembleScorer] = None
 _scaler = None
 _model_name: str = ""
@@ -73,7 +55,6 @@ def _load_model(model_dir: Path):
 
 @app.on_event("startup")
 def startup():
-    # Prefer demo model; fall back to creditcard if available
     candidates = [
         ROOT / "models_saved" / "demo",
         ROOT / "models_saved" / "creditcard",
@@ -87,9 +68,6 @@ def startup():
     )
 
 
-# ---------------------------------------------------------------------------
-# Request / Response schemas
-# ---------------------------------------------------------------------------
 class Transaction(BaseModel):
     vendor: Optional[str] = None
     amount: Optional[float] = None
@@ -134,9 +112,6 @@ class AnalyzeResponse(BaseModel):
     alerts: List[AlertResult]
 
 
-# ---------------------------------------------------------------------------
-# Endpoints
-# ---------------------------------------------------------------------------
 @app.get("/api/health")
 def health():
     return {
@@ -153,15 +128,12 @@ def analyze(req: AnalyzeRequest):
     if not req.transactions:
         raise HTTPException(400, "No transactions provided.")
 
-    # Build DataFrame
     rows = [t.dict() for t in req.transactions]
     df = pd.DataFrame(rows)
 
-    # Rename timestamp -> timestamp (already correct), ensure numeric amount
     if "amount" in df.columns:
         df["amount"] = pd.to_numeric(df["amount"], errors="coerce")
 
-    # Preprocess
     if "vendor" in df.columns:
         df["vendor"], _ = dedupe_vendors(df["vendor"].fillna("Unknown"))
     df = engineer_features(df)
@@ -173,7 +145,6 @@ def analyze(req: AnalyzeRequest):
 
     scored = _scorer.score_batch(X, df)
 
-    # Build response
     alerts = []
     flagged_amt = 0.0
     for r in scored:
@@ -183,7 +154,6 @@ def analyze(req: AnalyzeRequest):
         if tier in ("HIGH", "MEDIUM"):
             flagged_amt += amt or 0.0
 
-        # Top factor labels (plain names only for the frontend)
         factors = [f["name"].replace("feat_", "").replace("_", " ").title()
                    for f in (r.top_features or [])[:4]]
 
@@ -202,16 +172,13 @@ def analyze(req: AnalyzeRequest):
             factors=factors,
         ))
 
-    # Sort by score descending
     alerts.sort(key=lambda a: a.risk_score, reverse=True)
 
-    # Adaptive thresholding: if >25% of transactions are HIGH the dataset is
-    # too small for absolute thresholds to be meaningful. Fall back to relative
-    # ranking so the output stays useful — top 10% HIGH, next 20% MEDIUM.
+    # if >25% are HIGH on a small dataset, use relative ranking instead
     n = len(alerts)
     raw_high = sum(1 for a in alerts if a.risk_tier == "HIGH")
     if n > 0 and raw_high / n > 0.25:
-        scores = [a.risk_score for a in alerts]  # already sorted desc
+        scores = [a.risk_score for a in alerts]
         hi_cut = scores[max(0, int(n * 0.10) - 1)]
         med_cut = scores[max(0, int(n * 0.30) - 1)]
         for a in alerts:

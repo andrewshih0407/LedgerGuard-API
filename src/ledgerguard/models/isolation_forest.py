@@ -1,5 +1,3 @@
-"""Isolation Forest anomaly scorer (unsupervised path)."""
-
 import logging
 from pathlib import Path
 from typing import Optional
@@ -12,12 +10,6 @@ logger = logging.getLogger(__name__)
 
 
 class IFScorer:
-    """Wraps sklearn IsolationForest and normalises scores to [0, 100].
-
-    Isolation Forest returns scores in (-∞, 0] where more negative = more
-    anomalous. We convert to a 0–100 risk score via percentile normalisation
-    so the output is human-readable.
-    """
 
     def __init__(
         self,
@@ -46,24 +38,22 @@ class IFScorer:
         return self
 
     def score(self, X: np.ndarray) -> np.ndarray:
-        """Return risk scores in [0, 100]; higher = more anomalous."""
         raw = self.model.score_samples(X)
-        # Invert (more negative = more anomalous) and scale to [0, 100]
-        inverted = -raw  # now more positive = more anomalous
+        # more negative = more anomalous; invert and scale to [0, 100]
+        inverted = -raw
         rng = (-self._raw_min) - (-self._raw_max) + 1e-9
         normalised = (inverted - (-self._raw_max)) / rng * 100
         return np.clip(normalised, 0, 100)
 
     def predict_flags(self, X: np.ndarray) -> np.ndarray:
-        """Return binary prediction: 1 = anomaly, 0 = normal."""
         return (self.model.predict(X) == -1).astype(int)
 
     def save(self, path: Path) -> None:
         joblib.dump(self, path)
-        logger.info("IFScorer saved → %s", path)
+        logger.info("IFScorer saved -> %s", path)
 
     @classmethod
     def load(cls, path: Path) -> "IFScorer":
         obj = joblib.load(path)
-        logger.info("IFScorer loaded ← %s", path)
+        logger.info("IFScorer loaded <- %s", path)
         return obj

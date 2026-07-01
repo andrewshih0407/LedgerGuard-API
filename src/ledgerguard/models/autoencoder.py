@@ -1,10 +1,3 @@
-"""Autoencoder anomaly scorer — reconstruction-error path.
-
-Uses a shallow MLP autoencoder trained only on normal transactions.
-Reconstruction error on anomalies is much higher → risk signal.
-GPU-accelerated when CUDA is available.
-"""
-
 import logging
 from pathlib import Path
 from typing import Optional
@@ -40,7 +33,6 @@ class _AE(nn.Module):
 
 
 class AEScorer:
-    """Train on normal transactions; score via MSE reconstruction error."""
 
     def __init__(
         self,
@@ -78,12 +70,10 @@ class AEScorer:
         self.feature_names_ = feature_names or [f"f{i}" for i in range(X_train.shape[1])]
         input_dim = X_train.shape[1]
 
-        # Expand hidden_dims around bottleneck if needed
         self._model = _AE(input_dim, self.hidden_dims).to(DEVICE)
         optimiser = torch.optim.Adam(self._model.parameters(), lr=self.lr)
         criterion = nn.MSELoss()
 
-        # Val split
         n_val = max(1, int(len(X_train) * val_fraction))
         X_val = X_train[:n_val]
         X_tr = X_train[n_val:]
@@ -112,7 +102,6 @@ class AEScorer:
             if val_loss < best_val:
                 best_val = val_loss
                 best_state = {k: v.clone() for k, v in self._model.state_dict().items()}
-            # Live per-epoch update (every epoch, with GPU memory if on CUDA)
             if DEVICE.type == "cuda":
                 mem = torch.cuda.memory_allocated(0) / 1024**2
                 logger.info(
@@ -125,7 +114,6 @@ class AEScorer:
         if best_state:
             self._model.load_state_dict(best_state)
 
-        # Calibrate percentiles on training data for normalisation
         errors = self._reconstruction_errors(X_train)
         self._p5 = float(np.percentile(errors, 5))
         self._p95 = float(np.percentile(errors, 99))
@@ -140,7 +128,6 @@ class AEScorer:
         return np.mean((X - recon) ** 2, axis=1)
 
     def score(self, X: np.ndarray) -> np.ndarray:
-        """Return risk scores in [0, 100]."""
         errors = self._reconstruction_errors(X)
         rng = self._p95 - self._p5 + 1e-9
         normalised = (errors - self._p5) / rng * 100
@@ -152,7 +139,7 @@ class AEScorer:
             {"state_dict": self._model.state_dict(), "meta": self.__dict__ | {"_model": None}},
             path,
         )
-        logger.info("AEScorer saved → %s", path)
+        logger.info("AEScorer saved -> %s", path)
 
     @classmethod
     def load(cls, path: Path, input_dim: int) -> "AEScorer":
@@ -165,5 +152,5 @@ class AEScorer:
                 setattr(obj, k, v)
         obj._model = _AE(input_dim, obj.hidden_dims).to(DEVICE)
         obj._model.load_state_dict(data["state_dict"])
-        logger.info("AEScorer loaded ← %s", path)
+        logger.info("AEScorer loaded <- %s", path)
         return obj

@@ -1,5 +1,3 @@
-"""Feature engineering and preprocessing for transaction data."""
-
 import logging
 from typing import Optional
 
@@ -10,21 +8,11 @@ from sklearn.preprocessing import RobustScaler
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Vendor deduplication via fuzzy matching
-# ---------------------------------------------------------------------------
-
 def dedupe_vendors(
     series: pd.Series,
     threshold: int = 85,
     canonical_map: Optional[dict] = None,
 ) -> tuple[pd.Series, dict]:
-    """Cluster vendor/merchant names using rapidfuzz token_sort_ratio.
-
-    Returns a new Series with canonical vendor names and the mapping dict.
-    Runs in O(n²) — fine for <50k unique vendors; for larger sets, use the
-    'ledger_vendor_cluster' script which partitions first.
-    """
     try:
         from rapidfuzz import fuzz, process
     except ImportError:
@@ -37,7 +25,6 @@ def dedupe_vendors(
     unique_names = series.dropna().unique().tolist()
     mapping: dict[str, str] = dict(canonical_map)
 
-    # Build canonical set incrementally
     canonicals: list[str] = list(canonical_map.values())
     for name in unique_names:
         if name in mapping:
@@ -58,7 +45,7 @@ def dedupe_vendors(
     result = series.map(mapping).fillna(series)
     n_clusters = len(set(mapping.values()))
     logger.info(
-        "Vendor dedup: %d raw names → %d clusters (threshold=%d)",
+        "Vendor dedup: %d raw names -> %d clusters (threshold=%d)",
         len(unique_names),
         n_clusters,
         threshold,
@@ -66,20 +53,9 @@ def dedupe_vendors(
     return result, mapping
 
 
-# ---------------------------------------------------------------------------
-# Feature engineering
-# ---------------------------------------------------------------------------
-
 def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Derive anomaly-relevant features from raw transaction fields.
-
-    Adds columns (all prefixed ``feat_``) without dropping originals.
-    Works on any DataFrame that has at least an ``amount`` column; all other
-    columns are optional.
-    """
     df = df.copy()
 
-    # --- Amount statistics per vendor ---
     if "vendor" in df.columns and "amount" in df.columns:
         grp = df.groupby("vendor")["amount"]
         df["feat_vendor_mean_amount"] = grp.transform("mean")
@@ -94,33 +70,26 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
             / (df["feat_vendor_mean_amount"] + 1e-6)
         ) * 100
 
-    # --- Temporal features ---
     if "timestamp" in df.columns:
         ts = pd.to_datetime(df["timestamp"], errors="coerce", utc=True)
         df["feat_hour"] = ts.dt.hour
         df["feat_day_of_week"] = ts.dt.dayofweek
         df["feat_is_weekend"] = (ts.dt.dayofweek >= 5).astype(int)
         df["feat_month"] = ts.dt.month
-        # Transactions in the dead of night are suspicious
         df["feat_is_offhours"] = ((ts.dt.hour < 6) | (ts.dt.hour >= 22)).astype(int)
     elif "step" in df.columns:
-        # PaySim uses hourly steps (1–743 for a month)
         df["feat_hour"] = df["step"] % 24
         df["feat_day_of_week"] = (df["step"] // 24) % 7
         df["feat_is_weekend"] = (df["feat_day_of_week"] >= 5).astype(int)
 
-    # --- Duplicate payment detection ---
-    # Same amount + same vendor within a rolling window
     if "vendor" in df.columns and "amount" in df.columns:
         dup_key = df[["vendor", "amount"]].astype(str).agg("|".join, axis=1)
         df["feat_duplicate_count"] = dup_key.map(dup_key.value_counts())
         df["feat_is_likely_duplicate"] = (df["feat_duplicate_count"] > 1).astype(int)
 
-    # --- Amount log transform (handles heavy tails) ---
     if "amount" in df.columns:
         df["feat_log_amount"] = np.log1p(df["amount"].clip(lower=0))
 
-    # --- Balance-delta features (PaySim-style) ---
     if "sender_balance_before" in df.columns and "sender_balance_after" in df.columns:
         df["feat_sender_balance_delta"] = (
             df["sender_balance_before"] - df["sender_balance_after"]
@@ -129,11 +98,9 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
             (df["sender_balance_after"] == 0) & (df["sender_balance_before"] > 0)
         ).astype(int)
 
-    # --- New/rare vendor flag ---
     if "feat_vendor_tx_count" in df.columns:
         df["feat_is_new_vendor"] = (df["feat_vendor_tx_count"] <= 2).astype(int)
 
-    # --- Category-level amount deviation ---
     if "category" in df.columns and "amount" in df.columns:
         cgrp = df.groupby("category")["amount"]
         df["feat_cat_mean_amount"] = cgrp.transform("mean")
@@ -142,25 +109,18 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
             / (df["feat_cat_mean_amount"] + 1e-6)
         ) * 100
 
-    # --- Round-number payments (common in invoice fraud / kickbacks) ---
     if "amount" in df.columns:
         amt = df["amount"].fillna(0)
         df["feat_is_round_1k"] = (amt % 1000 == 0).astype(int)
         df["feat_is_round_500"] = (amt % 500 == 0).astype(int)
-        # Global amount z-score — catches absolute outliers any model can miss
         mu, sigma = amt.mean(), amt.std() + 1e-6
         df["feat_amount_zscore_global"] = (amt - mu) / sigma
-        # Ratio of this amount to the largest the vendor has ever billed
         if "vendor" in df.columns:
             vmax = df.groupby("vendor")["amount"].transform("max")
             df["feat_amount_vs_vendor_max"] = amt / (vmax + 1e-6)
 
     return df
 
-
-# ---------------------------------------------------------------------------
-# Scaling and final feature matrix extraction
-# ---------------------------------------------------------------------------
 
 FEATURE_COLS_CREDITCARD = [
     f"V{i}" for i in range(1, 29)
@@ -196,23 +156,16 @@ FEATURE_COLS_GENERIC = [
 def get_feature_matrix(
     df: pd.DataFrame, scaler: Optional[RobustScaler] = None, fit: bool = False
 ) -> tuple[np.ndarray, list[str], RobustScaler]:
-    """Return (X, feature_names, scaler) ready for model training/inference.
-
-    Picks creditcard PCA features when V1–V28 present, otherwise uses
-    derived ``feat_*`` columns. Falls back gracefully when columns missing.
-    """
-    # Decide feature set
     if "V1" in df.columns:
         cols = [c for c in FEATURE_COLS_CREDITCARD if c in df.columns]
     else:
         cols = [c for c in FEATURE_COLS_GENERIC if c in df.columns]
-        # Also include raw numeric columns not in the generic list
         numeric_extras = [
             c for c in df.select_dtypes(include=[np.number]).columns
             if c not in cols and c not in ("is_fraud", "is_flagged_fraud")
             and not c.startswith("feat_")
         ]
-        cols = cols + numeric_extras[:20]  # cap extras
+        cols = cols + numeric_extras[:20]
 
     if not cols:
         raise ValueError("No usable feature columns found in DataFrame.")

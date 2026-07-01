@@ -1,9 +1,3 @@
-"""LightGBM supervised anomaly scorer.
-
-Used when labelled data is available (is_fraud column is not NaN).
-Handles severe class imbalance via scale_pos_weight and optional SMOTE.
-"""
-
 import logging
 from pathlib import Path
 from typing import Optional
@@ -16,7 +10,6 @@ logger = logging.getLogger(__name__)
 
 
 class LGBMScorer:
-    """LightGBM binary classifier returning calibrated risk scores [0, 100]."""
 
     def __init__(
         self,
@@ -30,8 +23,7 @@ class LGBMScorer:
         n_jobs: int = -1,
         n_bag: int = 1,
     ):
-        # Seed-bagging: average n_bag models trained with different seeds to
-        # reduce variance (a standard, leakage-free way to lift F1 a little).
+        # seed-bagging: average n_bag models to reduce variance
         self.n_bag = n_bag
         self.params = dict(
             n_estimators=n_estimators,
@@ -71,11 +63,10 @@ class LGBMScorer:
                 from imblearn.over_sampling import SMOTE
                 sm = SMOTE(random_state=42)
                 X_tr, y_tr = sm.fit_resample(X, y)
-                logger.info("SMOTE: %d → %d samples", len(X), len(X_tr))
+                logger.info("SMOTE: %d -> %d samples", len(X), len(X_tr))
             except ImportError:
                 logger.warning("imbalanced-learn not installed; skipping SMOTE")
 
-        # Set scale_pos_weight for remaining imbalance
         neg, pos = (y_tr == 0).sum(), (y_tr == 1).sum()
         spw = neg / max(pos, 1)
         self.params["scale_pos_weight"] = spw
@@ -104,11 +95,10 @@ class LGBMScorer:
             self._models.append(model)
             if self.n_bag > 1:
                 logger.info("  bagged LightGBM %d/%d trained", b + 1, self.n_bag)
-        self._model = self._models[0]  # primary model (used by SHAP)
+        self._model = self._models[0]
         return self
 
     def score(self, X: np.ndarray) -> np.ndarray:
-        """Return risk scores in [0, 100], averaged across bagged models."""
         probas = np.column_stack([m.predict_proba(X)[:, 1] for m in self._models])
         return probas.mean(axis=1) * 100
 
@@ -118,7 +108,6 @@ class LGBMScorer:
         y: np.ndarray,
         n_splits: int = 5,
     ) -> dict:
-        """Run stratified k-fold and return mean AUC, precision, recall, F1."""
         from sklearn.metrics import (
             average_precision_score, f1_score, precision_score,
             recall_score, roc_auc_score,
@@ -147,10 +136,10 @@ class LGBMScorer:
 
     def save(self, path: Path) -> None:
         joblib.dump(self, path)
-        logger.info("LGBMScorer saved → %s", path)
+        logger.info("LGBMScorer saved -> %s", path)
 
     @classmethod
     def load(cls, path: Path) -> "LGBMScorer":
         obj = joblib.load(path)
-        logger.info("LGBMScorer loaded ← %s", path)
+        logger.info("LGBMScorer loaded <- %s", path)
         return obj

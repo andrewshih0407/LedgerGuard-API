@@ -1,19 +1,3 @@
-"""LedgerGuard training script — Module 1 (Transaction Anomaly Detection).
-
-Usage
------
-    python scripts/train.py --dataset creditcard --save-dir models_saved/creditcard
-    python scripts/train.py --dataset paysim    --save-dir models_saved/paysim
-    python scripts/train.py --csv path/to/file.csv --save-dir models_saved/custom
-
-The script:
-  1. Loads and engineers features from the chosen dataset.
-  2. Trains Isolation Forest + Autoencoder (+ LightGBM when labels exist).
-  3. Evaluates on a held-out test split.
-  4. Saves the ensemble to --save-dir.
-  5. Prints a summary metrics table.
-"""
-
 import argparse
 import logging
 import sys
@@ -23,7 +7,6 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
-# Ensure src is importable when run from project root
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from ledgerguard.data.loader import load_creditcard, load_paysim, load_banksim, load_generic
@@ -34,14 +17,13 @@ from ledgerguard.models.ensemble import EnsembleScorer
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
+    format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
     datefmt="%H:%M:%S",
 )
 logger = logging.getLogger("train")
 
 
 def print_gpu_banner():
-    """Print whether training will use the GPU."""
     try:
         import torch
         print("=" * 60)
@@ -52,10 +34,10 @@ def print_gpu_banner():
             print(f"  VRAM: {total:.1f} GB | CUDA {torch.version.cuda} | torch {torch.__version__}")
             print("  Autoencoder will train on GPU.")
         else:
-            print("  No CUDA GPU detected — training on CPU.")
+            print("  No CUDA GPU detected - training on CPU.")
         print("=" * 60)
     except ImportError:
-        print("  PyTorch not installed — autoencoder unavailable.")
+        print("  PyTorch not installed - autoencoder unavailable.")
 
 
 def banner(text: str):
@@ -73,7 +55,6 @@ def evaluate(scorer: EnsembleScorer, X_test: np.ndarray, y_test: np.ndarray, df_
     results = scorer.score_batch(X_test, df_test)
     scores = scorer.predict_proba(X_test)
 
-    # Use the threshold tuned on validation (maximises F1)
     thr = scorer.optimal_threshold if (scorer._use_meta or scorer._lgbm_primary) else 0.5
     preds = (scores >= thr).astype(int)
 
@@ -111,8 +92,7 @@ def evaluate(scorer: EnsembleScorer, X_test: np.ndarray, y_test: np.ndarray, df_
         print("=" * 60)
         print(classification_report(y_test, preds, target_names=["Normal", "Fraud"]))
 
-        # Did we hit the F1 >= 0.90 goal?
-        goal = "PASS ✅" if f1 >= 0.90 else "below target"
+        goal = "PASS" if f1 >= 0.90 else "below target"
         print(f"  >> F1 target (0.90): {goal}  (achieved {f1:.4f})")
     return results
 
@@ -129,7 +109,6 @@ def main():
 
     print_gpu_banner()
 
-    # --- Load ---
     if args.csv:
         df = load_generic(args.csv)
     elif args.dataset == "creditcard":
@@ -142,17 +121,15 @@ def main():
     if args.sample:
         df = df.sample(args.sample, random_state=42)
 
-    # --- Preprocess ---
     if "vendor" in df.columns:
         df["vendor"], _ = dedupe_vendors(df["vendor"])
     df = engineer_features(df)
 
-    # Labels
     y = df["is_fraud"].values if "is_fraud" in df.columns else None
     has_labels = y is not None and not np.isnan(y).all() and np.nansum(y) >= 10
     if not has_labels:
         y = None
-        logger.info("No valid labels found → unsupervised mode")
+        logger.info("No valid labels found -> unsupervised mode")
 
     X, feat_names, scaler = get_feature_matrix(df, fit=True)
 
@@ -165,10 +142,6 @@ def main():
     else:
         print("  Labels        : none (unsupervised mode)")
 
-    # --- Split: train / validation / test ---
-    # Validation set is used ONLY to fit the stacking meta-learner and tune
-    # the decision threshold — never seen by the base models. This prevents
-    # the leakage that would otherwise inflate the metrics.
     if y is not None:
         idx = np.arange(len(df))
         X_tr, X_tmp, y_tr, y_tmp, idx_tr, idx_tmp = train_test_split(
@@ -186,7 +159,6 @@ def main():
         df_te = df.iloc[int(len(df) * 0.8):].reset_index(drop=True)
         val_data = None
 
-    # --- Train ---
     banner("TRAINING (live)")
     import time
     t0 = time.time()
@@ -194,10 +166,8 @@ def main():
     ensemble.fit(X_tr, y_tr, feature_names=feat_names, val_data=val_data)
     print(f"\n  Total training time: {time.time() - t0:.1f}s")
 
-    # --- Evaluate ---
     evaluate(ensemble, X_te, y_te, df_te)
 
-    # --- Save ---
     args.save_dir.mkdir(parents=True, exist_ok=True)
     ensemble.save(args.save_dir)
     import joblib

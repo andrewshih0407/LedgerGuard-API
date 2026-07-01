@@ -1,28 +1,3 @@
-"""Ensemble scorer that fuses Isolation Forest, Autoencoder, and LightGBM.
-
-Strategy
---------
-Two fusion modes:
-
-1. STACKING (preferred when labels exist):
-   A LogisticRegression meta-learner is trained on the three base-model
-   scores. Instead of fixed weights, it *learns* how much to trust each
-   model. This avoids the problem where averaging a strong LightGBM score
-   with weaker IF/AE scores drags down good predictions.
-
-2. WEIGHTED AVERAGE (fallback / unsupervised):
-   Simple weighted mean of the available base scores.
-
-The decision threshold is tuned to maximise F1 on a validation split
-rather than hardcoded at 0.5.
-
-Risk tiers
-----------
-HIGH   ≥ high_threshold  → immediate flag, surfaced in real-time alerts
-MEDIUM ≥ medium_threshold → batch digest sent once daily
-LOW    < medium_threshold → logged only, not surfaced to user
-"""
-
 import json
 import logging
 from dataclasses import dataclass
@@ -46,17 +21,16 @@ RISK_MEDIUM_THRESHOLD = 40
 @dataclass
 class ScoredTransaction:
     index: int
-    risk_score: float          # 0–100
-    risk_tier: str             # HIGH / MEDIUM / LOW
+    risk_score: float
+    risk_tier: str
     if_score: float
     ae_score: float
-    lgbm_score: float          # -1 if not available
-    top_features: list[dict]   # [{name, value, direction}]
-    explanation: str           # plain-English reason
+    lgbm_score: float
+    top_features: list[dict]
+    explanation: str
 
 
 class EnsembleScorer:
-    """Fused anomaly scorer with stacking meta-learner + SHAP explanations."""
 
     def __init__(
         self,
@@ -75,17 +49,13 @@ class EnsembleScorer:
         self.if_scorer: Optional[IFScorer] = None
         self.ae_scorer: Optional[AEScorer] = None
         self.lgbm_scorer: Optional[LGBMScorer] = None
-        self.meta_model = None              # LogisticRegression stacking layer
-        self.optimal_threshold: float = 0.5  # tuned decision threshold (on prob scale)
+        self.meta_model = None
+        self.optimal_threshold: float = 0.5
         self._has_lgbm = False
         self._use_meta = False
         self._lgbm_primary = False
         self._feature_names: list[str] = []
         self._shap_explainer = None
-
-    # ------------------------------------------------------------------
-    # Training
-    # ------------------------------------------------------------------
 
     def fit(
         self,
@@ -96,24 +66,12 @@ class EnsembleScorer:
         val_data: Optional[tuple] = None,
         progress: bool = True,
     ) -> "EnsembleScorer":
-        """Train base models, then a stacking meta-learner.
-
-        Args:
-            X_train: Full feature matrix (scaled).
-            y_train: Binary labels or None for unsupervised mode.
-            feature_names: Column names for explanations.
-            X_normal: Normal-only subset for AE; defaults to y==0 rows.
-            val_data: (X_val, y_val) used to fit the meta-learner and tune
-                      the threshold without leakage. If None, a slice of the
-                      training data is held out internally.
-        """
         self._feature_names = feature_names or [f"f{i}" for i in range(X_train.shape[1])]
 
         def log(msg):
             if progress:
                 logger.info(msg)
 
-        # --- Base model 1: Isolation Forest (unsupervised) ---
         log("[1/3] Training Isolation Forest …")
         contamination = (
             max(0.001, float(y_train.mean())) if y_train is not None else 0.01
@@ -121,14 +79,12 @@ class EnsembleScorer:
         self.if_scorer = IFScorer(contamination=contamination)
         self.if_scorer.fit(X_train, self._feature_names)
 
-        # --- Base model 2: Autoencoder (trains on normals only) ---
         log("[2/3] Training Autoencoder (normal transactions only) …")
         if X_normal is None:
             X_normal = X_train[y_train == 0] if y_train is not None else X_train
         self.ae_scorer = AEScorer(epochs=30)
         self.ae_scorer.fit(X_normal, self._feature_names)
 
-        # --- Base model 3: LightGBM (supervised) ---
         if y_train is not None and y_train.sum() >= 10:
             log("[3/3] Training LightGBM (supervised) …")
             self._has_lgbm = True
@@ -139,8 +95,6 @@ class EnsembleScorer:
                 num_leaves=127,
                 n_bag=5,
             )
-            # No eval_set → train the full boosting schedule (early stopping on
-            # val-AUC was under-training and hurting test F1).
             self.lgbm_scorer.fit(
                 X_train, y_train,
                 feature_names=self._feature_names,
@@ -156,12 +110,7 @@ class EnsembleScorer:
             self._has_lgbm = False
             log("[3/3] No labels → skipping LightGBM (unsupervised mode)")
 
-        # --- Decide fusion strategy ---
         if self._has_lgbm:
-            # LightGBM dominates when labels exist. Decide from its calibrated
-            # probability and tune the threshold on validation. The IF/AE
-            # scores are kept for explanations and the "models agree" narrative,
-            # but are NOT allowed to dilute the strong supervised signal.
             self._use_meta = False
             self._lgbm_primary = True
             if val_data is not None:
@@ -169,7 +118,6 @@ class EnsembleScorer:
         elif y_train is not None and y_train.sum() >= 10:
             self._fit_meta(X_train, y_train, val_data, log)
         else:
-            # Fully unsupervised: average IF + AE
             self.w_if, self.w_ae, self.w_lgbm = 0.5, 0.5, 0.0
             self._use_meta = False
             self._lgbm_primary = False
@@ -177,7 +125,6 @@ class EnsembleScorer:
         return self
 
     def _tune_threshold_lgbm(self, val_data, log):
-        """Pick the LightGBM probability threshold that maximises F1 on val."""
         from sklearn.metrics import precision_recall_curve
 
         X_val, y_val = val_data
@@ -192,39 +139,34 @@ class EnsembleScorer:
         )
 
     def _base_scores(self, X: np.ndarray) -> np.ndarray:
-        """Return an (n, k) matrix of base-model scores in [0, 100]."""
         cols = [self.if_scorer.score(X), self.ae_scorer.score(X)]
         if self._has_lgbm:
             cols.append(self.lgbm_scorer.score(X))
         return np.column_stack(cols)
 
     def _fit_meta(self, X_train, y_train, val_data, log):
-        """Fit the logistic-regression stacking layer + tune the threshold."""
         from sklearn.linear_model import LogisticRegression
         from sklearn.metrics import f1_score, precision_recall_curve
 
         if val_data is not None:
             X_val, y_val = val_data
         else:
-            # Internal hold-out to avoid fitting meta on the same rows
             n_val = max(50, int(len(X_train) * 0.2))
             X_val, y_val = X_train[:n_val], y_train[:n_val]
 
         log("Fitting stacking meta-learner (LogisticRegression) …")
-        Z_val = self._base_scores(X_val) / 100.0  # base scores → [0,1]
+        Z_val = self._base_scores(X_val) / 100.0
         self.meta_model = LogisticRegression(
             class_weight="balanced", max_iter=1000, C=1.0
         )
         self.meta_model.fit(Z_val, y_val)
         self._use_meta = True
 
-        # Report learned weights so the user can see what it trusts
         names = ["IsolationForest", "Autoencoder"] + (["LightGBM"] if self._has_lgbm else [])
         coefs = self.meta_model.coef_[0]
         for n, c in zip(names, coefs):
             log(f"  meta weight  {n:16s} = {c:+.3f}")
 
-        # --- Threshold tuning: maximise F1 on validation ---
         probs = self.meta_model.predict_proba(Z_val)[:, 1]
         prec, rec, thresh = precision_recall_curve(y_val, probs)
         f1s = 2 * prec * rec / (prec + rec + 1e-9)
@@ -235,22 +177,14 @@ class EnsembleScorer:
             f"(val F1={f1s[best_idx]:.4f})"
         )
 
-    # ------------------------------------------------------------------
-    # Scoring
-    # ------------------------------------------------------------------
-
     def _combined_proba(self, X: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """Return (ensemble_score_0_100, base_scores_matrix)."""
         base = self._base_scores(X)
         if self._lgbm_primary and self._has_lgbm:
-            # LightGBM probability is the decision signal (its score() already
-            # returns proba*100). IF/AE are retained only for explanations.
             ensemble = base[:, 2]
         elif self._use_meta and self.meta_model is not None:
             proba = self.meta_model.predict_proba(base / 100.0)[:, 1]
             ensemble = proba * 100.0
         else:
-            # Weighted average fallback
             weights = [self.w_if, self.w_ae]
             if self._has_lgbm:
                 weights.append(self.w_lgbm)
@@ -303,7 +237,6 @@ class EnsembleScorer:
         return results
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
-        """Return ensemble fraud probability in [0, 1] (for evaluation)."""
         ensemble, _ = self._combined_proba(X)
         return ensemble / 100.0
 
@@ -330,10 +263,6 @@ class EnsembleScorer:
             }
             for j in order
         ]
-
-    # ------------------------------------------------------------------
-    # Plain-English explanation templates
-    # ------------------------------------------------------------------
 
     def _explain(self, score, if_s, ae_s, lgbm_s, top_features, row):
         parts = []
@@ -388,10 +317,6 @@ class EnsembleScorer:
             parts.append(f"{len(agreeing)} of {len(signals)} detection models agree this is suspicious.")
 
         return " ".join(parts)
-
-    # ------------------------------------------------------------------
-    # Persistence
-    # ------------------------------------------------------------------
 
     def save(self, directory: Path) -> None:
         directory.mkdir(parents=True, exist_ok=True)

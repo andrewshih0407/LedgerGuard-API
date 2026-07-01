@@ -1,12 +1,3 @@
-"""Dataset loaders for LedgerGuard.
-
-Supports:
-  - creditcardfraud (Kaggle mlg-ulb/creditcardfraud)
-  - paysim (ealaxi/paysim1)
-  - banksim (ealaxi/banksim1)
-  - generic CSV with auto-column detection
-"""
-
 import os
 import json
 import logging
@@ -21,12 +12,7 @@ logger = logging.getLogger(__name__)
 DATA_DIR = Path(__file__).resolve().parents[4] / "data"
 
 
-# ---------------------------------------------------------------------------
-# Kaggle helper
-# ---------------------------------------------------------------------------
-
 def _kaggle_download(dataset: str, dest: Path) -> None:
-    """Download a Kaggle dataset if not already present."""
     try:
         import kaggle  # noqa: F401
     except ImportError:
@@ -36,53 +22,31 @@ def _kaggle_download(dataset: str, dest: Path) -> None:
             "~/.kaggle/kaggle.json."
         )
     dest.mkdir(parents=True, exist_ok=True)
-    logger.info("Downloading %s → %s", dataset, dest)
+    logger.info("Downloading %s -> %s", dataset, dest)
     os.system(
         f'kaggle datasets download -d "{dataset}" -p "{dest}" --unzip'
     )
 
 
-# ---------------------------------------------------------------------------
-# Credit-card fraud (mlg-ulb)
-# ---------------------------------------------------------------------------
-
 def _openml_download_creditcard(dest: Path) -> pd.DataFrame:
-    """Fetch the credit-card fraud dataset from OpenML (no Kaggle needed).
-
-    OpenML hosts the identical mlg-ulb dataset under data_id=1597. This
-    works with zero credentials and caches locally after the first download.
-    """
     from sklearn.datasets import fetch_openml
 
-    logger.info("Downloading credit-card fraud dataset from OpenML (data_id=1597)…")
-    logger.info("(~143 MB, one-time download; cached afterwards)")
+    logger.info("Downloading credit-card fraud dataset from OpenML (data_id=1597)...")
     bunch = fetch_openml(data_id=1597, as_frame=True, parser="auto")
     df = bunch.frame.copy()
-    # OpenML target column is named 'Class' with string/categorical labels
     if "Class" in df.columns:
         df["Class"] = pd.to_numeric(df["Class"], errors="coerce").fillna(0).astype(int)
     dest.mkdir(parents=True, exist_ok=True)
     out = dest / "creditcard.csv"
     df.to_csv(out, index=False)
-    logger.info("Saved local copy → %s", out)
+    logger.info("Saved local copy -> %s", out)
     return df
 
 
 def load_creditcard(path: Optional[Path] = None) -> pd.DataFrame:
-    """Load the UCI/Kaggle/OpenML credit-card fraud dataset.
-
-    Resolution order:
-      1. Local CSV at ``path`` (or data/creditcard/creditcard.csv)
-      2. Kaggle download (if credentials configured)
-      3. OpenML download (no credentials required) ← automatic fallback
-
-    Returns a DataFrame with columns:
-        Time, V1–V28, Amount, is_fraud (0=legit, 1=fraud)
-    """
     if path is None:
         path = DATA_DIR / "creditcard" / "creditcard.csv"
     if not path.exists():
-        # Try Kaggle first, fall back to OpenML (no credentials)
         try:
             _kaggle_download("mlg-ulb/creditcardfraud", path.parent)
             if not path.exists():
@@ -97,7 +61,6 @@ def load_creditcard(path: Optional[Path] = None) -> pd.DataFrame:
             return df
     df = pd.read_csv(path)
     df.columns = [c.strip() for c in df.columns]
-    # Rename label column for consistency
     if "Class" in df.columns:
         df = df.rename(columns={"Class": "is_fraud"})
     logger.info(
@@ -107,10 +70,6 @@ def load_creditcard(path: Optional[Path] = None) -> pd.DataFrame:
     )
     return df
 
-
-# ---------------------------------------------------------------------------
-# PaySim (ealaxi/paysim1)
-# ---------------------------------------------------------------------------
 
 _PAYSIM_COLS = {
     "step": "step",
@@ -139,16 +98,11 @@ def load_paysim(path: Optional[Path] = None) -> pd.DataFrame:
     return df
 
 
-# ---------------------------------------------------------------------------
-# BankSim (ealaxi/banksim1)
-# ---------------------------------------------------------------------------
-
 def load_banksim(path: Optional[Path] = None) -> pd.DataFrame:
     path = path or DATA_DIR / "banksim" / "bs140513_032310.csv"
     if not path.exists():
         _kaggle_download("ealaxi/banksim1", path.parent)
     df = pd.read_csv(path)
-    # Normalise column names
     df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
     if "fraud" in df.columns:
         df = df.rename(columns={"fraud": "is_fraud"})
@@ -157,10 +111,6 @@ def load_banksim(path: Optional[Path] = None) -> pd.DataFrame:
     )
     return df
 
-
-# ---------------------------------------------------------------------------
-# Generic CSV loader
-# ---------------------------------------------------------------------------
 
 _FRAUD_ALIASES = ["is_fraud", "fraud", "isFraud", "label", "Class", "class", "target"]
 _AMOUNT_ALIASES = ["amount", "Amount", "amt", "transaction_amount", "value"]
@@ -186,38 +136,27 @@ def _first_match(df: pd.DataFrame, aliases: list[str]) -> Optional[str]:
 
 
 def load_generic(path: Path, label_col: Optional[str] = None) -> pd.DataFrame:
-    """Load any CSV and normalise key columns to LedgerGuard conventions.
-
-    Infers which column is the fraud label, amount, vendor, timestamp, and
-    category by scanning common aliases. Sets ``is_fraud`` to NaN if no label
-    column is found (triggers unsupervised path downstream).
-    """
     df = pd.read_csv(path)
     df.columns = [c.strip() for c in df.columns]
 
-    # Label
     lcol = label_col or _first_match(df, _FRAUD_ALIASES)
     if lcol and lcol != "is_fraud":
         df = df.rename(columns={lcol: "is_fraud"})
     elif not lcol:
-        df["is_fraud"] = np.nan  # unsupervised
+        df["is_fraud"] = np.nan
 
-    # Amount
     acol = _first_match(df, _AMOUNT_ALIASES)
     if acol and acol != "amount":
         df = df.rename(columns={acol: "amount"})
 
-    # Vendor
     vcol = _first_match(df, _VENDOR_ALIASES)
     if vcol and vcol != "vendor":
         df = df.rename(columns={vcol: "vendor"})
 
-    # Timestamp
     tcol = _first_match(df, _TIME_ALIASES)
     if tcol and tcol != "timestamp":
         df = df.rename(columns={tcol: "timestamp"})
 
-    # Category
     ccol = _first_match(df, _CATEGORY_ALIASES)
     if ccol and ccol != "category":
         df = df.rename(columns={ccol: "category"})
