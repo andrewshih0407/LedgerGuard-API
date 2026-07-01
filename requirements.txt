@@ -1,0 +1,44 @@
+# Core ML
+lightgbm>=4.3
+scikit-learn>=1.4
+numpy>=1.26
+pandas>=2.2
+scipy>=1.13
+
+# Imbalance handling
+imbalanced-learn>=0.12
+
+# SHAP explanations
+shap>=0.45
+
+# Vendor fuzzy matching
+rapidfuzz>=3.9
+
+# Deep learning (autoencoder — optional GPU path)
+torch>=2.3
+torchvision>=0.18
+
+# Forecasting (Module 3)
+prophet>=1.1
+statsmodels>=0.14
+
+# NLP (Module 2)
+transformers>=4.41
+sentence-transformers>=3.0
+
+# API / demo
+streamlit>=1.35
+fastapi>=0.111
+uvicorn[standard]>=0.30
+
+# Data / utilities
+kaggle>=1.6
+requests>=2.32
+tqdm>=4.66
+joblib>=1.4
+python-dotenv>=1.0
+plotly>=5.22
+
+# Evaluation
+matplotlib>=3.9
+seaborn>=0.13

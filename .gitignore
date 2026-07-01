@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+.env.local
+data/creditcard.csv
+data/*.csv
+*.egg-info/
+.pytest_cache/
+dist/
+build/
+.DS_Store
+Thumbs.db

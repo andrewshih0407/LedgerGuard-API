@@ -1,0 +1,36 @@
+SERVICE AGREEMENT
+
+This Service Agreement ("Agreement") is entered into as of January 1, 2024, between XYZ Vendor Corporation ("Vendor") and the Customer identified above.
+
+1. TERM AND RENEWAL
+This Agreement shall commence on January 1, 2024 and shall automatically renew for successive one-year terms unless written notice of non-renewal is provided by either party no less than ninety (90) days prior to the end of the then-current term. Failure to provide timely written notice shall result in automatic renewal under the terms then in effect.
+
+2. FEES AND PRICE ESCALATION
+Customer agrees to pay the monthly service fee of $4,500. Vendor reserves the right to increase the service fee annually by up to eight percent (8%) of the then-current fee, or the Consumer Price Index (CPI) for the prior calendar year, whichever is greater, without any cap on the number of successive increases. Vendor shall provide thirty (30) days written notice prior to implementing any price adjustment.
+
+3. SCOPE OF WORK
+Vendor shall provide services as deemed necessary and appropriate by Vendor in its sole discretion. All additional work beyond the standard service package may be billed separately at Vendor's standard hourly rates. Vendor's obligations hereunder are limited to best efforts only and do not constitute a guarantee of any particular outcome or result.
+
+4. TERMINATION
+Either party may terminate this Agreement for convenience upon sixty (60) days written notice. In the event of early termination by Customer, Customer shall pay an early termination fee equal to three (3) months of the then-current monthly service fee as liquidated damages, which the parties agree is a reasonable estimate of Vendor's damages.
+
+5. MODIFICATIONS
+Vendor may unilaterally modify the terms of this Agreement, including pricing and service levels, upon thirty (30) days written notice to Customer. Customer's continued use of the services after such notice period shall constitute acceptance of the modified terms.
+
+6. INDEMNIFICATION
+Customer shall indemnify, defend, and hold harmless Vendor and its officers, directors, employees, and agents from and against any and all claims, damages, losses, costs, and expenses (including reasonable attorneys' fees) arising out of or related to: (a) Customer's use of the services; (b) Customer's breach of this Agreement; or (c) any claims by Customer's end users.
+
+7. DISPUTE RESOLUTION
+Any dispute, claim, or controversy arising out of or relating to this Agreement shall be resolved exclusively by binding arbitration in accordance with the American Arbitration Association's Commercial Arbitration Rules. THE PARTIES HEREBY WAIVE THEIR RIGHT TO A JURY TRIAL AND AGREE THAT DISPUTES SHALL NOT BE CONSOLIDATED OR BROUGHT AS A CLASS ACTION.
+
+8. GOVERNING LAW
+This Agreement shall be governed by the laws of the State of Delaware, without regard to its conflict-of-law provisions.
+
+IN WITNESS WHEREOF, the parties have executed this Agreement as of the date first written above.
+
+XYZ VENDOR CORPORATION                    CUSTOMER
+
+By: ___________________________          By: ___________________________
+Name: John Smith                          Name: ___________________________
+Title: Chief Revenue Officer              Title: ___________________________
+Date: ___________________________         Date: ___________________________

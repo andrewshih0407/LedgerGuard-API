@@ -1,0 +1,19 @@
+# Slim requirements for the FastAPI inference server only (no training dependencies)
+
+# API
+fastapi>=0.111
+uvicorn[standard]>=0.30
+pydantic>=2.0
+
+# ML inference
+lightgbm>=4.3
+scikit-learn>=1.4
+numpy>=1.26
+pandas>=2.2
+joblib>=1.4
+rapidfuzz>=3.9
+imbalanced-learn>=0.12
+
+# Autoencoder inference (CPU-only torch — much smaller than GPU build)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.3

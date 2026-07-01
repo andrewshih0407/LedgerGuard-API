@@ -1,0 +1,173 @@
+[
+  {
+    "index": 31,
+    "risk_score": 100.0,
+    "risk_tier": "HIGH",
+    "if_score": 54.6,
+    "ae_score": 100.0,
+    "lgbm_score": 100.0,
+    "top_features": [
+      {
+        "name": "feat_amount_vs_cat_mean",
+        "value": 3.6299,
+        "shap": 12.5168,
+        "direction": "increases_risk"
+      },
+      {
+        "name": "feat_amount_pct_above_vendor_mean",
+        "value": 3.5986,
+        "shap": 5.9152,
+        "direction": "increases_risk"
+      },
+      {
+        "name": "feat_is_offhours",
+        "value": 0.0,
+        "shap": -1.9703,
+        "direction": "decreases_risk"
+      }
+    ],
+    "explanation": "Risk score 100/100 (high-risk). The $16,738.44 payment is 245% above the average of $4,854.51 for Tech Solutions LLC. Top driving factors: amount vs cat mean, amount pct above vendor mean. 3 of 3 detection models agree this is suspicious.",
+    "transaction": {
+      "timestamp": "2023-11-09 14:48:00",
+      "vendor": "Tech Solutions LLC",
+      "category": "IT Services",
+      "amount": 16738.44,
+      "account": "Capital Projects",
+      "is_fraud": 1,
+      "feat_vendor_mean_amount": 4854.505338983051,
+      "feat_vendor_std_amount": 2734.9474657751834,
+      "feat_vendor_tx_count": 236,
+      "feat_amount_vs_vendor_mean": 4.345214964962186,
+      "feat_amount_pct_above_vendor_mean": 244.80217506689237,
+      "feat_hour": 14,
+      "feat_day_of_week": 3,
+      "feat_is_weekend": 0,
+      "feat_month": 11,
+      "feat_is_offhours": 0,
+      "feat_duplicate_count": 1,
+      "feat_is_likely_duplicate": 0,
+      "feat_log_amount": 9.725522890676261,
+      "feat_is_new_vendor": 0,
+      "feat_cat_mean_amount": 4617.128436213991,
+      "feat_amount_vs_cat_mean": 262.529226306299,
+      "feat_is_round_1k": 0,
+      "feat_is_round_500": 0,
+      "feat_amount_zscore_global": 3.1692689336531363,
+      "feat_amount_vs_vendor_max": 0.6695375999732185
+    }
+  },
+  {
+    "index": 69,
+    "risk_score": 100.0,
+    "risk_tier": "HIGH",
+    "if_score": 45.2,
+    "ae_score": 100.0,
+    "lgbm_score": 100.0,
+    "top_features": [
+      {
+        "name": "feat_amount_vs_cat_mean",
+        "value": 4.8548,
+        "shap": 11.8626,
+        "direction": "increases_risk"
+      },
+      {
+        "name": "feat_amount_pct_above_vendor_mean",
+        "value": 4.3599,
+        "shap": 5.7252,
+        "direction": "increases_risk"
+      },
+      {
+        "name": "feat_is_offhours",
+        "value": 0.0,
+        "shap": -1.9336,
+        "direction": "decreases_risk"
+      }
+    ],
+    "explanation": "Risk score 100/100 (high-risk). The $10,267.75 payment is 299% above the average of $2,575.79 for Lakefront Catering. Top driving factors: amount vs cat mean, amount pct above vendor mean. 3 of 3 detection models agree this is suspicious.",
+    "transaction": {
+      "timestamp": "2023-01-20 14:05:00",
+      "vendor": "Lakefront Catering",
+      "category": "Facilities",
+      "amount": 10267.75,
+      "account": "Operations",
+      "is_fraud": 1,
+      "feat_vendor_mean_amount": 2575.789163636364,
+      "feat_vendor_std_amount": 3456.405627143612,
+      "feat_vendor_tx_count": 275,
+      "feat_amount_vs_vendor_mean": 2.225421916262439,
+      "feat_amount_pct_above_vendor_mean": 298.62540544732616,
+      "feat_hour": 14,
+      "feat_day_of_week": 4,
+      "feat_is_weekend": 0,
+      "feat_month": 1,
+      "feat_is_offhours": 0,
+      "feat_duplicate_count": 1,
+      "feat_is_likely_duplicate": 0,
+      "feat_log_amount": 9.236860581785578,
+      "feat_is_new_vendor": 0,
+      "feat_cat_mean_amount": 2269.440693568726,
+      "feat_amount_vs_cat_mean": 352.4352641412044,
+      "feat_is_round_1k": 0,
+      "feat_is_round_500": 0,
+      "feat_amount_zscore_global": 1.6202907057233038,
+      "feat_amount_vs_vendor_max": 0.2053549999958929
+    }
+  },
+  {
+    "index": 130,
+    "risk_score": 100.0,
+    "risk_tier": "HIGH",
+    "if_score": 59.6,
+    "ae_score": 100.0,
+    "lgbm_score": 100.0,
+    "top_features": [
+      {
+        "name": "feat_is_offhours",
+        "value": 1.0,
+        "shap": 11.9048,
+        "direction": "increases_risk"
+      },
+      {
+        "name": "feat_hour",
+        "value": -2.4,
+        "shap": 5.3233,
+        "direction": "increases_risk"
+      },
+      {
+        "name": "feat_duplicate_count",
+        "value": 0.0,
+        "shap": -1.7725,
+        "direction": "decreases_risk"
+      }
+    ],
+    "explanation": "Risk score 100/100 (high-risk). The $9,218.30 payment is 24% below the average of $12,208.23 for QuickPay LLC. Transaction occurred at 00:xx \u2014 outside normal business hours. Top driving factors: is offhours, hour. 3 of 3 detection models agree this is suspicious.",
+    "transaction": {
+      "timestamp": "2023-08-22 00:00:00",
+      "vendor": "QuickPay LLC",
+      "category": "Professional Services",
+      "amount": 9218.3,
+      "account": "General Fund",
+      "is_fraud": 1,
+      "feat_vendor_mean_amount": 12208.233333333332,
+      "feat_vendor_std_amount": 3807.7231695901082,
+      "feat_vendor_tx_count": 3,
+      "feat_amount_vs_vendor_mean": -0.785228652236807,
+      "feat_amount_pct_above_vendor_mean": -24.491122109574317,
+      "feat_hour": 0,
+      "feat_day_of_week": 1,
+      "feat_is_weekend": 0,
+      "feat_month": 8,
+      "feat_is_offhours": 1,
+      "feat_duplicate_count": 1,
+      "feat_is_likely_duplicate": 0,
+      "feat_log_amount": 9.129054391759531,
+      "feat_is_new_vendor": 0,
+      "feat_cat_mean_amount": 8947.552554744525,
+      "feat_amount_vs_cat_mean": 3.025938585648748,
+      "feat_is_round_1k": 0,
+      "feat_is_round_500": 0,
+      "feat_amount_zscore_global": 1.3690693983664433,
+      "feat_amount_vs_vendor_max": 0.5588552146164039
+    }
+  }
+]
